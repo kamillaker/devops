@@ -1,62 +1,86 @@
+import pool, { initDB } from "../lib/db"
 import { Fruit, CreateFruitDTO, UpdateFruitDTO } from "../models/fruit"
 import { randomUUID } from "crypto"
 
-class FruitStore {
-  private fruits: Map<string, Fruit> = new Map()
+let initialized = false
 
-  getAll(inSeason?: boolean): Fruit[] {
-    const all = Array.from(this.fruits.values())
-    if (inSeason === undefined) return all
-    return all.filter((f) => f.in_season === inSeason)
-  }
-
-  getById(id: string): Fruit | undefined {
-    return this.fruits.get(id)
-  }
-
-  getCheapest(): Fruit | undefined {
-    const all = Array.from(this.fruits.values())
-    if (all.length === 0) return undefined
-    return all.reduce((min, f) => (f.price < min.price ? f : min))
-  }
-
-  create(dto: CreateFruitDTO): Fruit {
-    const fruit: Fruit = {
-      id: randomUUID(),
-      name: dto.name,
-      price: dto.price,
-      in_season: dto.in_season,
-      created_at: new Date().toISOString(),
-    }
-    this.fruits.set(fruit.id, fruit)
-    return fruit
-  }
-
-  update(id: string, dto: UpdateFruitDTO): Fruit | undefined {
-    const existing = this.fruits.get(id)
-    if (!existing) return undefined
-    const updated: Fruit = {
-      ...existing,
-      ...(dto.name !== undefined && { name: dto.name }),
-      ...(dto.price !== undefined && { price: dto.price }),
-      ...(dto.in_season !== undefined && { in_season: dto.in_season }),
-    }
-    this.fruits.set(id, updated)
-    return updated
-  }
-
-  delete(id: string): boolean {
-    return this.fruits.delete(id)
-  }
-
-  clear(): void {
-    this.fruits.clear()
+async function ensureInit() {
+  if (!initialized) {
+    await initDB()
+    initialized = true
   }
 }
 
-const globalForStore = global as typeof global & { fruitStore?: FruitStore }
-if (!globalForStore.fruitStore) {
-  globalForStore.fruitStore = new FruitStore()
+export async function getAll(inSeason?: boolean): Promise<Fruit[]> {
+  await ensureInit()
+  if (inSeason !== undefined) {
+    const [rows] = await pool.execute("SELECT * FROM fruits WHERE in_season = ?", [inSeason])
+    return (rows as Record<string, unknown>[]).map(mapFruit)
+  }
+  const [rows] = await pool.execute("SELECT * FROM fruits")
+  return (rows as Record<string, unknown>[]).map(mapFruit)
 }
-const store = globalForStore.fruitStore
-export default store
+
+function mapFruit(row: Record<string, unknown>): Fruit {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    price: parseFloat(row.price as string),
+    in_season: Boolean(row.in_season),
+    created_at: row.created_at as string,
+  }
+}
+
+export async function getById(id: string): Promise<Fruit | undefined> {
+  await ensureInit()
+  const [rows] = await pool.execute("SELECT * FROM fruits WHERE id = ?", [id])
+  const fruits = (rows as Record<string, unknown>[]).map(mapFruit)
+  return fruits[0]
+}
+
+export async function getCheapest(): Promise<Fruit | undefined> {
+  await ensureInit()
+  const [rows] = await pool.execute("SELECT * FROM fruits ORDER BY price ASC LIMIT 1")
+  const fruits = (rows as Record<string, unknown>[]).map(mapFruit)
+  return fruits[0]
+}
+
+export async function create(dto: CreateFruitDTO): Promise<Fruit> {
+  await ensureInit()
+  const id = randomUUID()
+  const created_at = new Date().toISOString().slice(0, 19).replace('T', ' ')
+
+  await pool.execute(
+    "INSERT INTO fruits (id, name, price, in_season, created_at) VALUES (?, ?, ?, ?, ?)",
+    [id, dto.name, dto.price, dto.in_season, created_at]
+  )
+
+  return { id, name: dto.name, price: dto.price, in_season: dto.in_season, created_at }
+}
+
+export async function update(id: string, dto: UpdateFruitDTO): Promise<Fruit | undefined> {
+  await ensureInit()
+  const existing = await getById(id)
+  if (!existing) return undefined
+
+  const updated = {
+    ...existing,
+    ...(dto.name !== undefined && { name: dto.name }),
+    ...(dto.price !== undefined && { price: dto.price }),
+    ...(dto.in_season !== undefined && { in_season: dto.in_season }),
+  }
+
+  await pool.execute(
+    "UPDATE fruits SET name = ?, price = ?, in_season = ? WHERE id = ?",
+    [updated.name, updated.price, updated.in_season, id]
+  )
+
+  return updated
+}
+
+export async function deleteFruit(id: string): Promise<boolean> {
+  await ensureInit()
+  const [result] = await pool.execute("DELETE FROM fruits WHERE id = ?", [id])
+  const res = result as { affectedRows: number }
+  return res.affectedRows > 0
+}
