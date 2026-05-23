@@ -290,7 +290,7 @@ resource "aws_ecs_service" "fruit_api" {
   name            = "fruit-api-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.fruit_api.arn
-  desired_count   = 1
+  desired_count   = 2
   launch_type     = "FARGATE"
 
   network_configuration {
@@ -298,6 +298,14 @@ resource "aws_ecs_service" "fruit_api" {
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = true
   }
+  
+  load_balancer {
+    target_group_arn = aws_lb_target_group.fruit_api.arn
+    container_name   = "fruit-api"
+    container_port   = 3000
+  }
+
+  depends_on = [aws_lb_listener.fruit_api]
 }
 
 # AWS Secrets Manager
@@ -313,4 +321,47 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
     DB_PASSWORD = var.db_password
     DB_NAME     = var.db_name
   })
+}
+
+# Application Load Balancer
+resource "aws_lb" "main" {
+  name               = "fruit-api-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.ecs.id]
+  subnets            = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+
+  tags = {
+    Name = "fruit-api-alb"
+  }
+}
+
+resource "aws_lb_target_group" "fruit_api" {
+  name        = "fruit-api-tg"
+  port        = 3000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    path                = "/api/health"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    interval            = 30
+  }
+
+  tags = {
+    Name = "fruit-api-tg"
+  }
+}
+
+resource "aws_lb_listener" "fruit_api" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.fruit_api.arn
+  }
 }
