@@ -33,9 +33,9 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: fruitdb
-          MYSQL_USER: admin
-          MYSQL_PASSWORD: FruitApi123456
+          MYSQL_DATABASE: ${{ secrets.DB_NAME }}
+          MYSQL_USER: ${{ secrets.DB_USER }}
+          MYSQL_PASSWORD: ${{ secrets.DB_PASSWORD }}
         ports:
           - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
@@ -62,9 +62,9 @@ jobs:
             --name fruit-api-test \
             --network host \
             -e DB_HOST=127.0.0.1 \
-            -e DB_USER=admin \
-            -e DB_PASSWORD=FruitApi123456 \
-            -e DB_NAME=fruitdb \
+            -e DB_USER=${{ secrets.DB_USER }} \
+            -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+            -e DB_NAME=${{ secrets.DB_NAME }} \
             fruit-api
           sleep 5
 
@@ -76,7 +76,7 @@ jobs:
 
       - name: Stop container
         run: docker stop fruit-api-test
-
+        
   push-image:
     needs: build-and-test
     runs-on: ubuntu-latest
