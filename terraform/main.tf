@@ -212,6 +212,24 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_secrets" {
+  name = "fruit-api-ecs-secrets-policy"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.db_credentials.arn
+      }
+    ]
+  })
+}
+
 # ECS Task Definition
 resource "aws_ecs_task_definition" "fruit_api" {
   family                   = "fruit-api"
@@ -280,4 +298,19 @@ resource "aws_ecs_service" "fruit_api" {
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = true
   }
+}
+
+# AWS Secrets Manager
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name = "fruit-api/db-credentials"
+}
+
+resource "aws_secretsmanager_secret_version" "db_credentials" {
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    DB_HOST     = aws_db_instance.mysql.address
+    DB_USER     = var.db_username
+    DB_PASSWORD = var.db_password
+    DB_NAME     = var.db_name
+  })
 }
