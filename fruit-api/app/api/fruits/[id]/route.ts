@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import store from "../../../../store/fruitStore"
+import * as store from "../../../../store/fruitStore"
 import { validateUpdateFruit } from "../../../../lib/validation"
 
 type Params = { params: Promise<{ id: string }> }
 
 export async function GET(_request: NextRequest, { params }: Params) {
   const { id } = await params
-  const fruit = store.getById(id)
+  const fruit = await store.getById(id)
   if (!fruit) {
     return NextResponse.json({ error: "Fruit not found" }, { status: 404 })
   }
@@ -15,7 +15,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
 export async function PUT(request: NextRequest, { params }: Params) {
   const { id } = await params
-  if (!store.getById(id)) {
+  if (!await store.getById(id)) {
     return NextResponse.json({ error: "Fruit not found" }, { status: 404 })
   }
 
@@ -31,13 +31,13 @@ export async function PUT(request: NextRequest, { params }: Params) {
     return NextResponse.json({ errors }, { status: 422 })
   }
 
-  const updated = store.update(id, data!)
+  const updated = await store.update(id, data!)
   return NextResponse.json(updated, { status: 200 })
 }
 
 export async function DELETE(_request: NextRequest, { params }: Params) {
   const { id } = await params
-  const deleted = store.delete(id)
+  const deleted = await store.deleteFruit(id)
   if (!deleted) {
     return NextResponse.json({ error: "Fruit not found" }, { status: 404 })
   }

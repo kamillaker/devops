@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import store from "../../../store/fruitStore"
+import * as store from "../../../store/fruitStore"
 import { validateCreateFruit } from "../../../lib/validation"
 
 export async function GET(request: NextRequest) {
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (inSeasonParam === "true") inSeason = true
   else if (inSeasonParam === "false") inSeason = false
 
-  const fruits = store.getAll(inSeason)
+  const fruits = await store.getAll(inSeason)
   return NextResponse.json(fruits, { status: 200 })
 }
 
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ errors }, { status: 422 })
   }
 
-  const fruit = store.create(data!)
+  const fruit = await store.create(data!)
   return NextResponse.json(fruit, { status: 201 })
 }
 
